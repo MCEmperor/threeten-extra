@@ -32,6 +32,7 @@
 package org.threeten.extra;
 
 import java.io.Serializable;
+import java.time.DateTimeException;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.time.temporal.*;
@@ -70,7 +71,14 @@ public final class DayTime
      */
     private static final long serialVersionUID = -7762817588559947796L;
 
+    /**
+     * The day-of-week part.
+     */
     private final DayOfWeek dayOfWeek;
+
+    /**
+     * The time part.
+     */
     private final LocalTime localTime;
 
     private static final long NANOS_PER_MICROSECOND = 1_000;
@@ -86,6 +94,12 @@ public final class DayTime
     private static final long SECONDS_PER_DAY = MILLIS_PER_DAY / 1000;
     private static final long MINUTES_PER_DAY = SECONDS_PER_DAY / 60;
 
+    /**
+     * Constructs a new {@code DayTime} instance with the given day-of-week and time-of-day.
+     *
+     * @param dayOfWeek  the day-of-week part, not null
+     * @param localTime  the time-of-day part, not null
+     */
     private DayTime(final DayOfWeek dayOfWeek, final LocalTime localTime) {
         this.dayOfWeek = Objects.requireNonNull(dayOfWeek, "Day of week must not be null.");
         this.localTime = Objects.requireNonNull(localTime, "Time of day must not be null.");
@@ -103,13 +117,35 @@ public final class DayTime
         return new DayTime(dayOfWeek, localTime);
     }
 
+    /**
+     * Obtains an instance of {@code DayTime} from a temporal object.
+     * <p>
+     * This obtains a day-time based on the specified temporal. A {@code TemporalAccessor} represents an arbitrary set
+     * of date and time information, which this factory converts to an instance of {@code DayTime}.
+     * <p>
+     * The conversion extracts and combines the {@code DayOfWeek} and the {@code LocalTime} from the temporal object.
+     * Implementations are permitted to perform optimizations such as accessing those fields that are equivalent to the
+     * relevant objects.
+     * <p>
+     * This method matches the signature of the functional interface {@link TemporalQuery} allowing it to be used as a
+     * query via method reference, {@code LocalDateTime::from}.
+     *
+     * @param temporalAccessor  the temporal object to convert, not null
+     * @return the day-time, not null
+     * @throws DateTimeException if unable to convert to a {@code DayTime}
+     */
     public static DayTime from(final TemporalAccessor temporalAccessor) {
         Objects.requireNonNull(temporalAccessor, "Temporal accessor must not be null.");
 
-        final DayOfWeek dayOfWeek = DayOfWeek.from(temporalAccessor);
-        final LocalTime localTime = LocalTime.from(temporalAccessor);
-
-        return new DayTime(dayOfWeek, localTime);
+        try {
+            final DayOfWeek dayOfWeek = DayOfWeek.from(temporalAccessor);
+            final LocalTime localTime = LocalTime.from(temporalAccessor);
+            return new DayTime(dayOfWeek, localTime);
+        }
+        catch (DateTimeException exc) {
+            throw new DateTimeException("Unable to obtain DayTime from TemporalAccessor: " + temporalAccessor +
+                " of type " + temporalAccessor.getClass().getName(), exc);
+        }
     }
 
     /**
@@ -165,6 +201,13 @@ public final class DayTime
         return localTime.getNano();
     }
 
+    /**
+     * Gets the {@code LocalTime} part of this day-time.
+     * <p>
+     * This returns a {@code LocalTime} with the same hour, minute, second and nanosecond as this day-time.
+     *
+     * @return the time part of this day-time, not null
+     */
     public LocalTime toLocalTime() {
         return localTime;
     }
@@ -221,23 +264,43 @@ public final class DayTime
         if (field instanceof ChronoField) {
             final ChronoField chronoField = (ChronoField) field;
 
-            final DayOfWeek dayOfWeek;
-            final LocalTime localTime;
+            final DayOfWeek day;
+            final LocalTime time;
 
             if (field == ChronoField.DAY_OF_WEEK) {
-                dayOfWeek = DayOfWeek.of((int) newValue);
-                localTime = this.localTime;
+                day = DayOfWeek.of((int) newValue);
+                time = this.localTime;
             } else {
-                dayOfWeek = this.dayOfWeek;
-                localTime = this.localTime.with(chronoField, newValue);
+                day = this.dayOfWeek;
+                time = this.localTime.with(chronoField, newValue);
             }
 
-            return new DayTime(dayOfWeek, localTime);
+            return new DayTime(day, time);
         }
 
         return field.adjustInto(this, newValue);
     }
 
+    /**
+     * Returns a copy of this day-time with the specified amount added.
+     * <p>
+     * This returns a {@code DayTime}, based on this one, with the amount in terms of the unit added. If it is not
+     * possible to add the amount, because the unit is not supported or for some other reason, an exception is thrown.
+     * <p>
+     * If the field is a {@link ChronoUnit} then the addition is implemented here. Otherwise, if the field is not a
+     * {@code ChronoUnit}, then the result of this method is obtained by invoking {@code TemporalUnit.addTo(Temporal,
+     * long)} passing {@code this} as the argument. In this case, the unit determines whether and how to perform the
+     * addition.
+     * <p>
+     * This instance is immutable and unaffected by this method call.
+     *
+     * @param amountToAdd  the amount of the unit to add to the result, may be negative
+     * @param unit  the unit of the amount to add, not null
+     * @return a {@code DayTime} based on this day-time with the specified amount added, not null
+     * @throws DateTimeException if the addition cannot be made
+     * @throws UnsupportedTemporalTypeException if the unit is not supported
+     * @throws ArithmeticException if numeric overflow occurs
+     */
     @Override
     public DayTime plus(final long amountToAdd, final TemporalUnit unit) {
         final DayTime sum;
